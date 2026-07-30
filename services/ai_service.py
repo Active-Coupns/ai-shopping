@@ -149,32 +149,28 @@ async def curate_products(scraped_items: list, user_query: str) -> list:
     products_context = "\n---\n".join(formatted_input)
 
     system_prompt = (
-        "You are an AI Shopping Assistant Curation Engine. Your goal is to select the top 3 best matching products "
-        "from the provided raw e-commerce list based on the user's search query.\n"
-        "For each chosen product, you must:\n"
-        "1. Extract and clean its key specs as a structured key-value dictionary (formatted_specs).\n"
-        "2. Write a highly tailored 2-sentence explanation ('why_it_fits_you') directly answering how it meets "
-        "the user's specific request. Focus on budget, requirements, or features mentioned.\n"
-        "You MUST respond ONLY with a raw JSON object matching this schema:\n"
+        "You are an AI Shopping curation engine. Select the top 3 best matching products from the list.\n"
+        "For each product, extract key specs (formatted_specs) and write a 1-sentence reason ('why_it_fits_you') directly answering the user's request.\n"
+        "Respond ONLY with a JSON object in this structure:\n"
         "{\n"
         "  \"picks\": [\n"
         "    {\n"
-        "      \"original_id\": <number, corresponding to input ID>,\n"
-        "      \"title\": \"<cleaned title>\",\n"
-        "      \"price\": <number price>,\n"
-        "      \"source\": \"<store name, e.g. Amazon, Walmart, Flipkart>\",\n"
+        "      \"original_id\": <number>,\n"
+        "      \"title\": \"<short title>\",\n"
+        "      \"price\": <number>,\n"
+        "      \"source\": \"<store>\",\n"
         "      \"original_url\": \"<url>\",\n"
         "      \"formatted_specs\": { \"Key\": \"Value\" },\n"
-        "      \"why_it_fits_you\": \"<2-sentence reason>\"\n"
+        "      \"why_it_fits_you\": \"<1-sentence reason>\"\n"
         "    }\n"
         "  ]\n"
         "}"
     )
 
     user_prompt = (
-        f"User Search Query: \"{user_query}\"\n"
-        f"Target Country: {country}\n"
-        f"Available Products:\n{products_context}"
+        f"User Query: \"{user_query}\"\n"
+        f"Country: {country}\n"
+        f"Products:\n{products_context}"
     )
 
     try:
@@ -187,8 +183,8 @@ async def curate_products(scraped_items: list, user_query: str) -> list:
                 {"role": "user", "content": user_prompt}
             ],
             response_format={"type": "json_object"},
-            temperature=0.2,
-            max_tokens=1000
+            temperature=0.1,
+            max_tokens=400
         )
         
         content = response.choices[0].message.content

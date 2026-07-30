@@ -99,7 +99,7 @@ def generate_mock_products(query: str, country: str) -> List[Dict[str, Any]]:
 import asyncio
 
 async def _execute_hasdata_scrape(query: str, country: str) -> List[Dict[str, Any]]:
-    async with httpx.AsyncClient(timeout=5.0) as client:
+    async with httpx.AsyncClient(timeout=4.0) as client:
         headers = {
             "x-api-key": settings.HASDATA_API_KEY,
             "Content-Type": "application/json"
@@ -112,13 +112,14 @@ async def _execute_hasdata_scrape(query: str, country: str) -> List[Dict[str, An
         second_store = "Flipkart" if is_in else "Walmart"
         second_domain = "flipkart.com" if is_in else "walmart.com"
         
-        # 1. Fetch from Amazon Search API
+        # 1. Fetch from Amazon Search API (Page 1 only for fast caching/scraping)
         try:
             logger.info(f"Calling HasData Amazon Search Scraper for {amazon_domain}")
             params = {
                 "q": query,
                 "amazon_domain": amazon_domain,
-                "delivery_country": country
+                "delivery_country": country,
+                "page": 1
             }
             response = await client.get(
                 "https://api.hasdata.com/scrape/amazon/search",
@@ -151,13 +152,14 @@ async def _execute_hasdata_scrape(query: str, country: str) -> List[Dict[str, An
         except Exception as e:
             logger.error(f"Error occurred calling HasData Amazon Search: {str(e)}")
             
-        # 2. Fetch from second store (Walmart or Flipkart) via Google SERP API
+        # 2. Fetch from second store (Walmart or Flipkart) via Google SERP API (Page 1 only)
         try:
             logger.info(f"Calling HasData Google SERP Scraper for {second_store}")
             serp_query = f"site:{second_domain} {query}"
             params = {
                 "q": serp_query,
-                "location": "India" if is_in else "United States"
+                "location": "India" if is_in else "United States",
+                "page": 1
             }
             response = await client.get(
                 "https://api.hasdata.com/scrape/google/serp",
@@ -187,20 +189,20 @@ async def _execute_hasdata_scrape(query: str, country: str) -> List[Dict[str, An
 async def scrape_products(query: str, country: str) -> List[Dict[str, Any]]:
     """Scrapes products from country-aware target e-commerce platforms using HasData API.
     
-    Enforces a strict 6-second timeout, instantly falling back to high-fidelity mock data on timeout or failure.
+    Enforces a strict 5-second timeout, instantly falling back to local pre-structured JSON results on timeout or failure.
     """
     if not settings.HASDATA_API_KEY:
         logger.warning("HASDATA_API_KEY not configured. Falling back to Mock Scraper Engine.")
         return generate_mock_products(query, country)
         
     try:
-        scraped = await asyncio.wait_for(_execute_hasdata_scrape(query, country), timeout=6.0)
+        scraped = await asyncio.wait_for(_execute_hasdata_scrape(query, country), timeout=5.0)
         if not scraped:
             logger.warning("Scraper API calls returned no results. Falling back to mock data.")
             return generate_mock_products(query, country)
         return scraped
     except asyncio.TimeoutError:
-        logger.error("HasData scraping exceeded strict 6.0 second timeout limit. Falling back to mock data.")
+        logger.error("HasData scraping exceeded strict 5.0 second timeout limit. Falling back to mock data.")
         return generate_mock_products(query, country)
     except Exception as e:
         logger.error(f"Error occurred calling HasData APIs: {str(e)}. Falling back to mock data.")

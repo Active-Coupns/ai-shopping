@@ -94,10 +94,10 @@ async def execute_search(
             return curated_picks
 
         try:
-            # Set overall pipeline timeout to 7.0 seconds (within 8.0s limit including logs)
+            # Set overall pipeline timeout to 6.2 seconds (within 7.0s limit including logs)
             final_raw_picks = await asyncio.wait_for(
                 run_search_pipeline(),
-                timeout=7.0
+                timeout=6.2
             )
         except asyncio.TimeoutError:
             logger.warning("Overall search pipeline timed out. Using fallback products.")
