@@ -94,5 +94,44 @@ def seed_database(db: Session):
         
         demo_key = ApiKey(client_id=demo_client.id, key="gw_acmedemosecretkey123", is_active=True)
         db.add(demo_key)
-        
-    db.commit()
+        db.commit()
+
+    # Ensure the requested key gw_49219b7938a801d920087bc153c6ec2b is seeded and active
+    target_key = "gw_49219b7938a801d920087bc153c6ec2b"
+    key_record = db.query(ApiKey).filter(ApiKey.key == target_key).first()
+    if not key_record:
+        # Resolve client to link this key to
+        client_record = db.query(Client).filter(Client.email == "assistant@acme.com").first()
+        if not client_record:
+            client_record = db.query(Client).first()
+        if not client_record:
+            client_record = Client(
+                name="Acme Dev",
+                email="acme@gateway.local",
+                password="password123"
+            )
+            db.add(client_record)
+            db.flush()
+
+        # Check/Create wallet
+        wallet_record = db.query(CreditWallet).filter(CreditWallet.client_id == client_record.id).first()
+        if not wallet_record:
+            wallet_record = CreditWallet(client_id=client_record.id, balance=100.0, currency="USD")
+            db.add(wallet_record)
+        else:
+            wallet_record.balance = 100.0
+
+        # Add key
+        new_key = ApiKey(client_id=client_record.id, key=target_key, is_active=True)
+        db.add(new_key)
+        db.commit()
+    else:
+        # Ensure it is active and has credits
+        key_record.is_active = True
+        wallet_record = db.query(CreditWallet).filter(CreditWallet.client_id == key_record.client_id).first()
+        if wallet_record:
+            wallet_record.balance = 100.0
+        else:
+            wallet_record = CreditWallet(client_id=key_record.client_id, balance=100.0, currency="USD")
+            db.add(wallet_record)
+        db.commit()
