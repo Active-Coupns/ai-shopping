@@ -1,6 +1,7 @@
 import json
 import logging
 import traceback
+import asyncio
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import HTMLResponse
@@ -8,7 +9,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from schemas.search import SearchRequest, SearchResponse, ProductCuration
 from services.auth_service import get_current_client, deduct_wallet_credits
-from services.scraper_service import scrape_products
+from services.scraper_service import scrape_products, generate_mock_products
 from services.ai_service import curate_products, optimize_search_query
 from services.affiliate_service import process_affiliates_and_coupons
 from models.usage_log import UsageLog
@@ -66,19 +67,51 @@ async def execute_search(
         # Step 1: Upfront Credit Deduction (Safeguarded by DB transaction rollback)
         updated_wallet = deduct_wallet_credits(db, wallet, amount=1.0)
         
-        # Step 2: Stage 1 AI Query Optimization
-        optimized_query = await optimize_search_query(request.query, request.country)
-        
-        # Step 3: HasData Scraper fetch for country
-        raw_products = await scrape_products(optimized_query, request.country)
-        
-        # Step 4: Stage 2 AI Product Curation
-        curated_picks = await curate_products(raw_products, request.query)
-        
+        async def run_search_pipeline():
+            # Stage 1: AI Query Optimization
+            try:
+                optimized_query = await asyncio.wait_for(
+                    optimize_search_query(request.query, request.country),
+                    timeout=2.0
+                )
+            except Exception:
+                logger.warning("Query optimization failed or timed out. Using original query.")
+                optimized_query = request.query
+                
+            # Stage 2: HasData Scraper fetch for country
+            raw_products = await scrape_products(optimized_query, request.country)
+            
+            # Stage 3: AI Product Curation
+            try:
+                curated_picks = await asyncio.wait_for(
+                    curate_products(raw_products, request.query),
+                    timeout=2.5
+                )
+            except Exception:
+                logger.warning("Product curation failed or timed out. Using raw scraped products.")
+                curated_picks = raw_products[:3]
+                
+            return curated_picks
+
+        try:
+            # Set overall pipeline timeout to 7.0 seconds (within 8.0s limit including logs)
+            final_raw_picks = await asyncio.wait_for(
+                run_search_pipeline(),
+                timeout=7.0
+            )
+        except asyncio.TimeoutError:
+            logger.warning("Overall search pipeline timed out. Using fallback products.")
+            fallback_raw = generate_mock_products(request.query, request.country)
+            final_raw_picks = fallback_raw[:3]
+        except Exception as e:
+            logger.error(f"Search pipeline encountered error: {str(e)}. Using fallback products.")
+            fallback_raw = generate_mock_products(request.query, request.country)
+            final_raw_picks = fallback_raw[:3]
+            
         # Step 5: Smart Hybrid Affiliate Link & Coupon waterfall Conversion
         final_picks, active_coupons = process_affiliates_and_coupons(
             db, 
-            curated_picks, 
+            final_raw_picks, 
             request.country,
             client.id
         )

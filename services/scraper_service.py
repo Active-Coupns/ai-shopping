@@ -96,16 +96,10 @@ def generate_mock_products(query: str, country: str) -> List[Dict[str, Any]]:
         
     return products
 
-async def scrape_products(query: str, country: str) -> List[Dict[str, Any]]:
-    """Scrapes products from country-aware target e-commerce platforms using HasData API.
-    
-    Falls back to high-fidelity mock data if api key is missing or calls fail.
-    """
-    if not settings.HASDATA_API_KEY:
-        logger.warning("HASDATA_API_KEY not configured. Falling back to Mock Scraper Engine.")
-        return generate_mock_products(query, country)
-        
-    async with httpx.AsyncClient(timeout=10.0) as client:
+import asyncio
+
+async def _execute_hasdata_scrape(query: str, country: str) -> List[Dict[str, Any]]:
+    async with httpx.AsyncClient(timeout=5.0) as client:
         headers = {
             "x-api-key": settings.HASDATA_API_KEY,
             "Content-Type": "application/json"
@@ -188,8 +182,26 @@ async def scrape_products(query: str, country: str) -> List[Dict[str, Any]]:
         except Exception as e:
             logger.error(f"Error occurred calling HasData Google SERP: {str(e)}")
             
-        if not scraped_products:
+        return scraped_products
+
+async def scrape_products(query: str, country: str) -> List[Dict[str, Any]]:
+    """Scrapes products from country-aware target e-commerce platforms using HasData API.
+    
+    Enforces a strict 6-second timeout, instantly falling back to high-fidelity mock data on timeout or failure.
+    """
+    if not settings.HASDATA_API_KEY:
+        logger.warning("HASDATA_API_KEY not configured. Falling back to Mock Scraper Engine.")
+        return generate_mock_products(query, country)
+        
+    try:
+        scraped = await asyncio.wait_for(_execute_hasdata_scrape(query, country), timeout=6.0)
+        if not scraped:
             logger.warning("Scraper API calls returned no results. Falling back to mock data.")
             return generate_mock_products(query, country)
-            
-        return scraped_products
+        return scraped
+    except asyncio.TimeoutError:
+        logger.error("HasData scraping exceeded strict 6.0 second timeout limit. Falling back to mock data.")
+        return generate_mock_products(query, country)
+    except Exception as e:
+        logger.error(f"Error occurred calling HasData APIs: {str(e)}. Falling back to mock data.")
+        return generate_mock_products(query, country)
