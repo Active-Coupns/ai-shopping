@@ -44,6 +44,10 @@ def reveal_coupon(
     # 2. Return JSON response with coupon code
     return { "status": "success", "coupon_code": code }
 
+@router.options("/search")
+async def search_options():
+    return {}
+
 @router.post("/search", response_model=SearchResponse, summary="Execute white-labeled e-commerce search")
 async def execute_search(
     request: SearchRequest,
