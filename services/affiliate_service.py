@@ -85,10 +85,10 @@ def transform_product_url(product_url: str, merchant: str, config: AffiliateConf
         template = getattr(config, "aggregator_url_template", None) or "https://links2re.com/?pub_id={PUB_ID}&url={URL}"
         
         # Replace template tokens case-insensitively
-        redirect_url = template.replace("{PUB_ID}", pub_id)\
-                               .replace("{pub_id}", pub_id)\
-                               .replace("{URL}", quote(product_url))\
-                               .replace("{url}", quote(product_url))
+        redirect_url = template.replace("{PUB_ID}", str(pub_id))\
+                               .replace("{pub_id}", str(pub_id))\
+                               .replace("{URL}", quote(str(product_url or '')))\
+                               .replace("{url}", quote(str(product_url or '')))
         return redirect_url
         
     # Check 3: Fallback - Return Clean Original URL
@@ -240,7 +240,7 @@ def process_affiliates_and_coupons(
                 
         # Generate Reveal URL if a coupon is active
         if coupon_status != "No Coupon Available Today":
-            reveal_url = f"/v1/reveal-coupon?store={quote(source)}&url={quote(p_copy['affiliate_url'])}&code={quote(coupon_code)}"
+            reveal_url = f"/v1/reveal-coupon?store={quote(str(source or ''))}&url={quote(str(p_copy.get('affiliate_url') or ''))}&code={quote(str(coupon_code or ''))}"
             if client_id:
                 reveal_url += f"&client_id={client_id}"
                 

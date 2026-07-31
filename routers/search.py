@@ -188,12 +188,27 @@ async def execute_search(
                 )
             
         # Step 5: Smart Hybrid Affiliate Link & Coupon waterfall Conversion
-        final_picks, active_coupons = process_affiliates_and_coupons(
-            db, 
-            final_raw_picks, 
-            request.country,
-            client.id
-        )
+        try:
+            final_picks, active_coupons = process_affiliates_and_coupons(
+                db, 
+                final_raw_picks, 
+                request.country,
+                client.id
+            )
+        except Exception as aff_err:
+            logger.warning(f"Affiliate/coupon processing failed: {str(aff_err)}. Falling back to raw picks.")
+            final_picks = []
+            for p in final_raw_picks:
+                p_copy = p.copy()
+                p_copy["affiliate_url"] = p_copy.get("original_url") or ""
+                p_copy["coupon_code"] = "None"
+                p_copy["coupon_description"] = "No Coupon Available Today"
+                p_copy["coupon_status"] = "No Coupon Available Today"
+                p_copy["reveal_url"] = ""
+                if "why_it_fits_you" not in p_copy:
+                    p_copy["why_it_fits_you"] = p_copy.get("raw_details", "No description available.")[:200]
+                final_picks.append(p_copy)
+            active_coupons = []
         
         # Step 6: Log usage metrics on success
         log_entry = UsageLog(
