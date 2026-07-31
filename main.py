@@ -2,6 +2,8 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 
 from database import engine, Base, SessionLocal, seed_database
 from routers.search import router as search_router
@@ -95,6 +97,14 @@ async def options_preflight_middleware(request: Request, call_next):
         return response
     response = await call_next(request)
     return response
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    logger.error(f"Pydantic validation failed for request {request.url.path}: {exc.errors()}\nBody: {exc.body}")
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY if 'status' in globals() else 422,
+        content={"detail": exc.errors(), "body": exc.body}
+    )
 
 # Mount Routers
 app.include_router(search_router)

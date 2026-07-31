@@ -1,16 +1,21 @@
 from pydantic import BaseModel, Field, field_validator
-from typing import List, Dict, Any, Literal
+from typing import List, Dict, Any, Literal, Optional
 
 class SearchRequest(BaseModel):
-    query: str = Field(..., min_length=2, description="E-commerce search query")
-    country: Literal["US", "IN"] = Field(..., description="Target country code (US or IN)")
+    query: str = Field(default="deals", description="E-commerce search query")
+    country: Optional[str] = Field(default="US", description="Target country code (US or IN)")
+    user_id: Optional[str] = Field(default=None, description="Optional end-user identifier")
+    page: Optional[int] = Field(default=1, description="Page index")
 
-    @field_validator("country")
+    @field_validator("country", mode="before")
     @classmethod
-    def validate_country(cls, v: str) -> str:
-        if v not in ("US", "IN"):
-            raise ValueError("Supported countries are US or IN")
-        return v
+    def validate_country(cls, v: Any) -> str:
+        if not v:
+            return "US"
+        v_str = str(v).upper().strip()
+        if v_str not in ("US", "IN"):
+            return "US"
+        return v_str
 
 class ProductCuration(BaseModel):
     title: str = Field(..., description="Name/title of the product")
