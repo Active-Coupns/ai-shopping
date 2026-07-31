@@ -99,10 +99,10 @@ async def execute_search(
             return curated_picks
 
         try:
-            # Set overall pipeline timeout to 6.2 seconds (within 7.0s limit including logs)
+            # Set overall pipeline timeout to 28.0 seconds to support live scraping
             final_raw_picks = await asyncio.wait_for(
                 run_search_pipeline(),
-                timeout=6.2
+                timeout=28.0
             )
         except asyncio.TimeoutError:
             if not settings.HASDATA_API_KEY:

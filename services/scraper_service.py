@@ -128,17 +128,16 @@ def generate_mock_products(query: str, country: str) -> List[Dict[str, Any]]:
 import asyncio
 
 async def _execute_hasdata_scrape(query: str, country: str) -> List[Dict[str, Any]]:
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx.AsyncClient(timeout=25.0) as client:
         headers = {
             "x-api-key": settings.HASDATA_API_KEY,
             "Content-Type": "application/json"
         }
         
         scraped_products = []
-        is_in = (country == "IN")
         
-        amazon_domain = "www.amazon.in" if is_in else "www.amazon.com"
-        second_store = "Flipkart" if is_in else "Walmart"
+        amazon_domain = "www.amazon.in"
+        second_store = "Flipkart"
         
         # 1. Fetch from Amazon Search API (Page 1 only for fast caching/scraping)
         try:
@@ -146,7 +145,7 @@ async def _execute_hasdata_scrape(query: str, country: str) -> List[Dict[str, An
             params = {
                 "q": query,
                 "amazon_domain": amazon_domain,
-                "delivery_country": country,
+                "delivery_country": "IN",
                 "page": 1
             }
             response = await client.get(
@@ -194,11 +193,11 @@ async def _execute_hasdata_scrape(query: str, country: str) -> List[Dict[str, An
             logger.info(f"Calling HasData Google Shopping Scraper for {second_store}")
             params = {
                 "q": query,
-                "domain": "google.co.in" if is_in else "google.com",
-                "country": country.lower(),
-                "location": "India" if is_in else "United States",
+                "domain": "google.co.in",
+                "country": "in",
+                "location": "India",
                 "tbm": "shop",
-                "gl": country.lower(),
+                "gl": "in",
                 "hl": "en",
                 "page": 1
             }
@@ -250,7 +249,7 @@ async def _execute_hasdata_scrape(query: str, country: str) -> List[Dict[str, An
 async def scrape_products(query: str, country: str) -> List[Dict[str, Any]]:
     """Scrapes products from country-aware target e-commerce platforms using HasData API.
     
-    Enforces a strict 5-second timeout, raising HTTPException on timeout or empty results.
+    Enforces a strict 25-second timeout, raising HTTPException on timeout or empty results.
     """
     sanitized = sanitize_query(query)
     if not settings.HASDATA_API_KEY:
@@ -258,13 +257,13 @@ async def scrape_products(query: str, country: str) -> List[Dict[str, Any]]:
         return generate_mock_products(sanitized, country)
         
     try:
-        scraped = await asyncio.wait_for(_execute_hasdata_scrape(sanitized, country), timeout=5.0)
+        scraped = await asyncio.wait_for(_execute_hasdata_scrape(sanitized, country), timeout=25.0)
         if not scraped:
             logger.warning("Scraper API calls returned no results.")
             raise HTTPException(status_code=502, detail="Scraping yielded no valid retail results")
         return scraped
     except asyncio.TimeoutError:
-        logger.error("HasData scraping exceeded strict 5.0 second timeout limit.")
+        logger.error("HasData scraping exceeded strict 25.0 second timeout limit.")
         raise HTTPException(status_code=504, detail="Scraping service timed out")
     except HTTPException as he:
         raise he
