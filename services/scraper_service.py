@@ -1,10 +1,27 @@
 import logging
 import httpx
+import re
 from typing import List, Dict, Any
 from config import settings
 from fastapi import HTTPException
 
 logger = logging.getLogger("gateway.scraper")
+
+def sanitize_query(query: str) -> str:
+    """Cleans the incoming user query by removing currency symbols, commas, and non-essential stop words."""
+    # Lowercase
+    q = query.lower()
+    # Remove currency symbols and commas
+    q = q.replace("₹", "").replace("$", "").replace(",", "")
+    
+    # Remove common non-essential stop words/phrases for e-commerce search
+    stop_words = ["best", "for", "and", "a", "an", "the", "&", "with", "buy", "online", "price"]
+    for word in stop_words:
+        q = re.sub(rf"\b{word}\b", "", q)
+        
+    # Remove duplicate spaces
+    q = " ".join(q.split())
+    return q.strip()
 
 # Mock e-commerce data generation helper for testing/fallback when API keys are absent
 def generate_mock_products(query: str, country: str) -> List[Dict[str, Any]]:
@@ -235,12 +252,13 @@ async def scrape_products(query: str, country: str) -> List[Dict[str, Any]]:
     
     Enforces a strict 5-second timeout, raising HTTPException on timeout or empty results.
     """
+    sanitized = sanitize_query(query)
     if not settings.HASDATA_API_KEY:
         logger.warning("HASDATA_API_KEY not configured. Falling back to Mock Scraper Engine.")
-        return generate_mock_products(query, country)
+        return generate_mock_products(sanitized, country)
         
     try:
-        scraped = await asyncio.wait_for(_execute_hasdata_scrape(query, country), timeout=5.0)
+        scraped = await asyncio.wait_for(_execute_hasdata_scrape(sanitized, country), timeout=5.0)
         if not scraped:
             logger.warning("Scraper API calls returned no results.")
             raise HTTPException(status_code=502, detail="Scraping yielded no valid retail results")
