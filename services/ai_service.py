@@ -107,7 +107,7 @@ def generate_mock_ai_curation(query: str, products: List[Dict[str, Any]], countr
                 "Quality": "High grade components"
             }
             
-        curr_symbol = "INR " if country == "IN" else "$"
+        curr_symbol = "$"
         sentence_1 = f"This {prod['source']} option is selected because its price of {curr_symbol}{price:,.2f} aligns perfectly with your query '{query}'."
         sentence_2 = f"With a user rating of {prod.get('rating', 4.0)}/5, it represents a highly recommended, robust choice that balances features and durability."
         why_fits = f"{sentence_1} {sentence_2}"
@@ -152,6 +152,10 @@ async def curate_products(scraped_items: list, user_query: str) -> list:
 
     system_prompt = (
         "You are an AI Shopping curation engine. Select the top 3 best matching products from the list.\n"
+        "Rules:\n"
+        "1. Keep product titles clean and concise, stripping out artificial dynamic text like '- Curation Choice (...)'.\n"
+        "2. Ensure the store/vendor name in the 'why_it_fits_you' explanation matches the product source exactly (e.g. refer to Amazon as Amazon, not Walmart/Flipkart).\n"
+        "3. Use the exact price values and currency symbol (always $) present in the input. Do not convert prices or currencies.\n"
         "For each product, extract key specs (formatted_specs) and write a 1-sentence reason ('why_it_fits_you') directly answering the user's request.\n"
         "Respond ONLY with a JSON object in this structure:\n"
         "{\n"

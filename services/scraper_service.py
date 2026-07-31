@@ -173,6 +173,8 @@ async def _execute_hasdata_scrape(query: str, country: str) -> List[Dict[str, An
             params = {
                 "q": serp_query,
                 "location": "India" if is_in else "United States",
+                "gl": "in" if is_in else "us",
+                "hl": "en",
                 "page": 1
             }
             response = await client.get(

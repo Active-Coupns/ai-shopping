@@ -136,7 +136,8 @@ async def execute_search(
         return SearchResponse(
             results=result_payloads,
             coupons=active_coupons,
-            credits_remaining=updated_wallet.balance
+            credits_remaining=updated_wallet.balance,
+            currency="$"
         )
         
     except HTTPException as http_ex:
