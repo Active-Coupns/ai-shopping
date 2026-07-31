@@ -157,7 +157,7 @@ async def _execute_hasdata_scrape(query: str, country: str) -> List[Dict[str, An
             if response.status_code == 200:
                 data = response.json()
                 results = data.get("searchResults") or data.get("results") or []
-                for item in results[:8]:
+                for item in results:
                     price_str = str(item.get("price") or "")
                     price_val = 0.0
                     try:
@@ -169,14 +169,23 @@ async def _execute_hasdata_scrape(query: str, country: str) -> List[Dict[str, An
                     except Exception:
                         pass
                         
+                    # Strict validation: title, positive price, image, and link
+                    title = item.get("title") or item.get("name")
+                    if not title or not isinstance(title, str) or not title.strip():
+                        continue
                     if not price_val or price_val <= 0.0:
-                        continue # Filter out zero-price products!
+                        continue
+                    img_url = item.get("image") or item.get("imageUrl") or item.get("thumbnail")
+                    if not img_url or not isinstance(img_url, str) or not img_url.startswith("http"):
+                        continue
+                    orig_url = item.get("url") or item.get("link")
+                    if not orig_url or not isinstance(orig_url, str) or not orig_url.startswith("http"):
+                        continue
                         
-                    img_url = item.get("image") or item.get("imageUrl") or item.get("thumbnail") or "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500"
                     scraped_products.append({
-                        "title": item.get("title") or item.get("name"),
+                        "title": title,
                         "price": price_val,
-                        "original_url": item.get("url") or item.get("link"),
+                        "original_url": orig_url,
                         "source": "Amazon",
                         "rating": float(item.get("rating") or 4.0),
                         "raw_details": f"Amazon Product. ASIN: {item.get('asin')}. Rating: {item.get('rating')}. Reviews: {item.get('reviewsCount')}.",
@@ -209,9 +218,8 @@ async def _execute_hasdata_scrape(query: str, country: str) -> List[Dict[str, An
             
             if response.status_code == 200:
                 data = response.json()
-                # Check shoppingResults first, then organicResults, then general results
                 results = data.get("shoppingResults") or data.get("organicResults") or data.get("results") or []
-                for item in results[:8]:
+                for item in results:
                     price_str = str(item.get("price") or "")
                     price_val = 0.0
                     try:
@@ -223,16 +231,24 @@ async def _execute_hasdata_scrape(query: str, country: str) -> List[Dict[str, An
                     except Exception:
                         pass
                         
+                    # Strict validation: title, positive price, image, and link
+                    title = item.get("title") or item.get("name")
+                    if not title or not isinstance(title, str) or not title.strip():
+                        continue
                     if not price_val or price_val <= 0.0:
-                        continue # Filter out zero-price products!
-                        
+                        continue
                     img_list = item.get("images") or []
-                    img_url = item.get("thumbnail") or (img_list[0] if img_list else None) or item.get("image") or "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500"
-                    
+                    img_url = item.get("thumbnail") or (img_list[0] if img_list else None) or item.get("image")
+                    if not img_url or not isinstance(img_url, str) or not img_url.startswith("http"):
+                        continue
+                    orig_url = item.get("link") or item.get("url") or item.get("productLink")
+                    if not orig_url or not isinstance(orig_url, str) or not orig_url.startswith("http"):
+                        continue
+                        
                     scraped_products.append({
-                        "title": item.get("title") or item.get("name"),
+                        "title": title,
                         "price": price_val,
-                        "original_url": item.get("link") or item.get("url") or item.get("productLink"),
+                        "original_url": orig_url,
                         "source": second_store,
                         "rating": float(item.get("rating") or 4.0),
                         "raw_details": item.get("snippet") or f"Google Shopping Item from {item.get('source') or second_store}",
@@ -244,7 +260,7 @@ async def _execute_hasdata_scrape(query: str, country: str) -> List[Dict[str, An
         except Exception as e:
             logger.error(f"Error occurred calling HasData Google Shopping SERP: {str(e)}")
             
-        return scraped_products
+        return scraped_products[:5]
 
 async def scrape_products(query: str, country: str) -> List[Dict[str, Any]]:
     """Scrapes products from country-aware target e-commerce platforms using HasData API.

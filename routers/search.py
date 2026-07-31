@@ -49,7 +49,7 @@ def reveal_coupon(
 async def search_options():
     return {}
 
-@router.post("/search", response_model=SearchResponse, summary="Execute white-labeled e-commerce search")
+@router.post("/search", summary="Execute white-labeled e-commerce search")
 async def execute_search(
     request: SearchRequest,
     client_auth: tuple = Depends(get_current_client),
@@ -121,17 +121,17 @@ async def execute_search(
                 )
                 db.add(log_entry)
                 db.commit()
-                return SearchResponse(
-                    results=[],
-                    products=[],
-                    coupons=[],
-                    credits_remaining=updated_wallet.balance,
-                    currency="$",
-                    message="Scraper timeout",
-                    query=request.query,
-                    ai_analysis="Scraping took too long. Please try again.",
-                    total_deals=0
-                )
+                return {
+                    "results": [],
+                    "products": [],
+                    "coupons": [],
+                    "credits_remaining": updated_wallet.balance,
+                    "currency": "INR",
+                    "message": "Scraper timeout",
+                    "query": request.query,
+                    "ai_analysis": "Scraping took too long. Please try again.",
+                    "total_deals": 0
+                }
         except HTTPException as he:
             if not settings.HASDATA_API_KEY:
                 raise he
@@ -147,17 +147,17 @@ async def execute_search(
                 )
                 db.add(log_entry)
                 db.commit()
-                return SearchResponse(
-                    results=[],
-                    products=[],
-                    coupons=[],
-                    credits_remaining=updated_wallet.balance,
-                    currency="$",
-                    message="Scraper timeout",
-                    query=request.query,
-                    ai_analysis="Scraping took too long. Please try again.",
-                    total_deals=0
-                )
+                return {
+                    "results": [],
+                    "products": [],
+                    "coupons": [],
+                    "credits_remaining": updated_wallet.balance,
+                    "currency": "INR",
+                    "message": "Scraper timeout",
+                    "query": request.query,
+                    "ai_analysis": "Scraping took too long. Please try again.",
+                    "total_deals": 0
+                }
         except Exception as e:
             if not settings.HASDATA_API_KEY:
                 logger.error(f"Search pipeline encountered error: {str(e)}. Using fallback products.")
@@ -175,32 +175,49 @@ async def execute_search(
                 )
                 db.add(log_entry)
                 db.commit()
-                return SearchResponse(
-                    results=[],
-                    products=[],
-                    coupons=[],
-                    credits_remaining=updated_wallet.balance,
-                    currency="$",
-                    message="Scraper timeout",
-                    query=request.query,
-                    ai_analysis="Scraping took too long. Please try again.",
-                    total_deals=0
-                )
+                return {
+                    "results": [],
+                    "products": [],
+                    "coupons": [],
+                    "credits_remaining": updated_wallet.balance,
+                    "currency": "INR",
+                    "message": "Scraper timeout",
+                    "query": request.query,
+                    "ai_analysis": "Scraping took too long. Please try again.",
+                    "total_deals": 0
+                }
             
-        # Step 5: Smart Hybrid Affiliate Link & Coupon waterfall Conversion
-        try:
-            final_picks, active_coupons = process_affiliates_and_coupons(
-                db, 
-                final_raw_picks, 
-                request.country,
-                client.id
-            )
-        except Exception as aff_err:
-            logger.warning(f"Affiliate/coupon processing failed: {str(aff_err)}. Falling back to raw picks.")
+        # Step 5: Conditional Affiliate Processing based on production mode
+        if not settings.HASDATA_API_KEY:
+            try:
+                final_picks, active_coupons = process_affiliates_and_coupons(
+                    db, 
+                    final_raw_picks, 
+                    request.country,
+                    client.id
+                )
+            except Exception as aff_err:
+                logger.warning(f"Affiliate/coupon processing failed: {aff_err}. Falling back to raw picks.")
+                final_picks = []
+                for p in final_raw_picks:
+                    p_copy = p.copy()
+                    p_copy["affiliate_url"] = p_copy.get("original_url") or ""
+                    p_copy["coupon_code"] = "None"
+                    p_copy["coupon_description"] = "No Coupon Available Today"
+                    p_copy["coupon_status"] = "No Coupon Available Today"
+                    p_copy["reveal_url"] = ""
+                    if "why_it_fits_you" not in p_copy:
+                        p_copy["why_it_fits_you"] = p_copy.get("raw_details", "No description available.")[:200]
+                    final_picks.append(p_copy)
+                active_coupons = []
+        else:
+            # Production Mode: completely bypass process_affiliates_and_coupons
             final_picks = []
             for p in final_raw_picks:
                 p_copy = p.copy()
-                p_copy["affiliate_url"] = p_copy.get("original_url") or ""
+                url_val = p_copy.get("original_url") or p_copy.get("affiliate_url") or ""
+                p_copy["original_url"] = url_val
+                p_copy["affiliate_url"] = url_val
                 p_copy["coupon_code"] = "None"
                 p_copy["coupon_description"] = "No Coupon Available Today"
                 p_copy["coupon_status"] = "No Coupon Available Today"
@@ -222,13 +239,18 @@ async def execute_search(
         db.add(log_entry)
         db.commit()
         
-        result_payloads = [ProductCuration(**prod) for prod in final_picks]
-        return SearchResponse(
-            results=result_payloads,
-            coupons=active_coupons,
-            credits_remaining=updated_wallet.balance,
-            currency="$"
-        )
+        # Ensure we return standard JSON dictionary without strict Pydantic type checks
+        return {
+            "results": final_picks,
+            "products": final_picks,
+            "coupons": active_coupons,
+            "credits_remaining": updated_wallet.balance,
+            "currency": "INR",
+            "query": request.query,
+            "ai_analysis": "Curation completed successfully.",
+            "total_deals": 0,
+            "message": "Success"
+        }
         
     except HTTPException as http_ex:
         db.rollback() # Rollback credit deduction on HTTP errors
