@@ -2,6 +2,7 @@ import logging
 import httpx
 from typing import List, Dict, Any
 from config import settings
+from fastapi import HTTPException
 
 logger = logging.getLogger("gateway.scraper")
 
@@ -121,7 +122,6 @@ async def _execute_hasdata_scrape(query: str, country: str) -> List[Dict[str, An
         
         amazon_domain = "www.amazon.in" if is_in else "www.amazon.com"
         second_store = "Flipkart" if is_in else "Walmart"
-        second_domain = "flipkart.com" if is_in else "walmart.com"
         
         # 1. Fetch from Amazon Search API (Page 1 only for fast caching/scraping)
         try:
@@ -142,13 +142,19 @@ async def _execute_hasdata_scrape(query: str, country: str) -> List[Dict[str, An
                 data = response.json()
                 results = data.get("searchResults") or data.get("results") or []
                 for item in results[:5]:
-                    price_str = item.get("price") or "0.0"
+                    price_str = str(item.get("price") or "")
                     price_val = 0.0
                     try:
-                        clean_price = "".join(c for c in str(price_str) if c.isdigit() or c == ".")
+                        clean_price = "".join(c for c in price_str if c.isdigit() or c == ".")
+                        if clean_price.count(".") > 1:
+                            parts = clean_price.split(".")
+                            clean_price = parts[0] + "." + "".join(parts[1:])
                         price_val = float(clean_price) if clean_price else 0.0
-                    except ValueError:
+                    except Exception:
                         pass
+                        
+                    if not price_val or price_val <= 0.0:
+                        continue # Filter out zero-price products!
                         
                     img_url = item.get("image") or item.get("imageUrl") or item.get("thumbnail") or "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500"
                     scraped_products.append({
@@ -166,14 +172,14 @@ async def _execute_hasdata_scrape(query: str, country: str) -> List[Dict[str, An
         except Exception as e:
             logger.error(f"Error occurred calling HasData Amazon Search: {str(e)}")
             
-        # 2. Fetch from second store (Walmart or Flipkart) via Google SERP API (Page 1 only)
+        # 2. Fetch from Google Shopping via Google SERP API (querying Google Shopping explicitly)
         try:
-            logger.info(f"Calling HasData Google SERP Scraper for {second_store}")
-            serp_query = f"site:{second_domain} {query}"
+            logger.info(f"Calling HasData Google Shopping Scraper for {second_store}")
             params = {
-                "q": serp_query,
+                "q": query,
                 "location": "India" if is_in else "United States",
-                "gl": "in" if is_in else "us",
+                "tbm": "shop",
+                "gl": country.lower(),
                 "hl": "en",
                 "page": 1
             }
@@ -185,30 +191,47 @@ async def _execute_hasdata_scrape(query: str, country: str) -> List[Dict[str, An
             
             if response.status_code == 200:
                 data = response.json()
-                results = data.get("organicResults") or data.get("organic") or []
+                # Check shoppingResults first, then organicResults, then general results
+                results = data.get("shoppingResults") or data.get("organicResults") or data.get("results") or []
                 for item in results[:5]:
-                    img_url = item.get("image") or item.get("imageUrl") or item.get("thumbnail") or "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500"
+                    price_str = str(item.get("price") or "")
+                    price_val = 0.0
+                    try:
+                        clean_price = "".join(c for c in price_str if c.isdigit() or c == ".")
+                        if clean_price.count(".") > 1:
+                            parts = clean_price.split(".")
+                            clean_price = parts[0] + "." + "".join(parts[1:])
+                        price_val = float(clean_price) if clean_price else 0.0
+                    except Exception:
+                        pass
+                        
+                    if not price_val or price_val <= 0.0:
+                        continue # Filter out zero-price products!
+                        
+                    img_list = item.get("images") or []
+                    img_url = item.get("thumbnail") or (img_list[0] if img_list else None) or item.get("image") or "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500"
+                    
                     scraped_products.append({
-                        "title": item.get("title"),
-                        "price": 0.0,
-                        "original_url": item.get("link") or item.get("url"),
+                        "title": item.get("title") or item.get("name"),
+                        "price": price_val,
+                        "original_url": item.get("link") or item.get("url") or item.get("productLink"),
                         "source": second_store,
-                        "rating": 4.0,
-                        "raw_details": item.get("snippet") or "",
+                        "rating": float(item.get("rating") or 4.0),
+                        "raw_details": item.get("snippet") or f"Google Shopping Item from {item.get('source') or second_store}",
                         "image_url": img_url,
                         "thumbnail": img_url
                     })
             else:
-                logger.error(f"HasData Google SERP API returned status {response.status_code}: {response.text}")
+                logger.error(f"HasData Google Shopping API returned status {response.status_code}: {response.text}")
         except Exception as e:
-            logger.error(f"Error occurred calling HasData Google SERP: {str(e)}")
+            logger.error(f"Error occurred calling HasData Google Shopping SERP: {str(e)}")
             
         return scraped_products
 
 async def scrape_products(query: str, country: str) -> List[Dict[str, Any]]:
     """Scrapes products from country-aware target e-commerce platforms using HasData API.
     
-    Enforces a strict 5-second timeout, instantly falling back to local pre-structured JSON results on timeout or failure.
+    Enforces a strict 5-second timeout, raising HTTPException on timeout or empty results.
     """
     if not settings.HASDATA_API_KEY:
         logger.warning("HASDATA_API_KEY not configured. Falling back to Mock Scraper Engine.")
@@ -217,12 +240,14 @@ async def scrape_products(query: str, country: str) -> List[Dict[str, Any]]:
     try:
         scraped = await asyncio.wait_for(_execute_hasdata_scrape(query, country), timeout=5.0)
         if not scraped:
-            logger.warning("Scraper API calls returned no results. Falling back to mock data.")
-            return generate_mock_products(query, country)
+            logger.warning("Scraper API calls returned no results.")
+            raise HTTPException(status_code=502, detail="Scraping yielded no valid retail results")
         return scraped
     except asyncio.TimeoutError:
-        logger.error("HasData scraping exceeded strict 5.0 second timeout limit. Falling back to mock data.")
-        return generate_mock_products(query, country)
+        logger.error("HasData scraping exceeded strict 5.0 second timeout limit.")
+        raise HTTPException(status_code=504, detail="Scraping service timed out")
+    except HTTPException as he:
+        raise he
     except Exception as e:
-        logger.error(f"Error occurred calling HasData APIs: {str(e)}. Falling back to mock data.")
-        return generate_mock_products(query, country)
+        logger.error(f"Error occurred calling HasData APIs: {str(e)}.")
+        raise HTTPException(status_code=502, detail=f"Scraping service error: {str(e)}")

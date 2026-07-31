@@ -104,13 +104,21 @@ async def execute_search(
                 timeout=6.2
             )
         except asyncio.TimeoutError:
-            logger.warning("Overall search pipeline timed out. Using fallback products.")
-            fallback_raw = generate_mock_products(request.query, request.country)
-            final_raw_picks = fallback_raw[:3]
+            if not settings.HASDATA_API_KEY:
+                logger.warning("Overall search pipeline timed out. Using fallback products.")
+                fallback_raw = generate_mock_products(request.query, request.country)
+                final_raw_picks = fallback_raw[:3]
+            else:
+                raise HTTPException(status_code=504, detail="Search request timed out")
+        except HTTPException as he:
+            raise he
         except Exception as e:
-            logger.error(f"Search pipeline encountered error: {str(e)}. Using fallback products.")
-            fallback_raw = generate_mock_products(request.query, request.country)
-            final_raw_picks = fallback_raw[:3]
+            if not settings.HASDATA_API_KEY:
+                logger.error(f"Search pipeline encountered error: {str(e)}. Using fallback products.")
+                fallback_raw = generate_mock_products(request.query, request.country)
+                final_raw_picks = fallback_raw[:3]
+            else:
+                raise HTTPException(status_code=502, detail=f"Search pipeline error: {str(e)}")
             
         # Step 5: Smart Hybrid Affiliate Link & Coupon waterfall Conversion
         final_picks, active_coupons = process_affiliates_and_coupons(
