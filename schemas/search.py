@@ -29,6 +29,8 @@ class ProductCuration(BaseModel):
     coupon_description: str = Field(default="No Coupon Available Today", description="Description of the coupon offer")
     coupon_status: str = Field(default="No Coupon Available Today", description="Status of the coupon waterfall")
     reveal_url: str = Field(default="", description="The URL endpoint to reveal coupon and redirect affiliate session")
+    image_url: Optional[str] = Field(default=None, description="HTTPS URL of the product image")
+    thumbnail: Optional[str] = Field(default=None, description="HTTPS URL of the product thumbnail")
 
 class Coupon(BaseModel):
     code: str = Field(..., description="Promo code or discount code")

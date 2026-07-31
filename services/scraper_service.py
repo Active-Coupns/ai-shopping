@@ -85,13 +85,24 @@ def generate_mock_products(query: str, country: str) -> List[Dict[str, Any]]:
         else: # Flipkart
             url = f"https://www.{store_domain}/mock-product-{idx:03d}/p/itm12345678"
 
+        img_map = {
+            "laptop": "https://images.unsplash.com/photo-1496181130204-755241544e35?w=500",
+            "phone": "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=500",
+            "shoes": "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=500",
+            "watch": "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500",
+            "generic": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500"
+        }
+        img_url = img_map.get(category, img_map["generic"])
+
         products.append({
-            "title": f"{item['brand']} {item['name']} - Curation Choice ({query})",
+            "title": f"{item['brand']} {item['name']}",
             "price": price_val,
             "original_url": url,
             "source": store_name,
             "rating": item["rating"],
-            "raw_details": f"Brand: {item['brand']}. Ideal for users looking for high quality {category} in {country}. Evaluated rating is {item['rating']}/5."
+            "raw_details": f"Brand: {item['brand']}. Ideal for users looking for high quality {category} in {country}. Evaluated rating is {item['rating']}/5.",
+            "image_url": img_url,
+            "thumbnail": img_url
         })
         
     return products
@@ -139,13 +150,16 @@ async def _execute_hasdata_scrape(query: str, country: str) -> List[Dict[str, An
                     except ValueError:
                         pass
                         
+                    img_url = item.get("image") or item.get("imageUrl") or item.get("thumbnail") or "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500"
                     scraped_products.append({
                         "title": item.get("title") or item.get("name"),
                         "price": price_val,
                         "original_url": item.get("url") or item.get("link"),
                         "source": "Amazon",
                         "rating": float(item.get("rating") or 4.0),
-                        "raw_details": f"Amazon Product. ASIN: {item.get('asin')}. Rating: {item.get('rating')}. Reviews: {item.get('reviewsCount')}."
+                        "raw_details": f"Amazon Product. ASIN: {item.get('asin')}. Rating: {item.get('rating')}. Reviews: {item.get('reviewsCount')}.",
+                        "image_url": img_url,
+                        "thumbnail": img_url
                     })
             else:
                 logger.error(f"HasData Amazon API returned status {response.status_code}: {response.text}")
@@ -171,13 +185,16 @@ async def _execute_hasdata_scrape(query: str, country: str) -> List[Dict[str, An
                 data = response.json()
                 results = data.get("organicResults") or data.get("organic") or []
                 for item in results[:5]:
+                    img_url = item.get("image") or item.get("imageUrl") or item.get("thumbnail") or "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500"
                     scraped_products.append({
                         "title": item.get("title"),
                         "price": 0.0,
                         "original_url": item.get("link") or item.get("url"),
                         "source": second_store,
                         "rating": 4.0,
-                        "raw_details": item.get("snippet") or ""
+                        "raw_details": item.get("snippet") or "",
+                        "image_url": img_url,
+                        "thumbnail": img_url
                     })
             else:
                 logger.error(f"HasData Google SERP API returned status {response.status_code}: {response.text}")

@@ -83,7 +83,7 @@ async def execute_search(
                 optimized_query = request.query
                 
             # Stage 2: HasData Scraper fetch for country
-            raw_products = await scrape_products(optimized_query, request.country)
+            raw_products = await scrape_products(request.query, request.country)
             
             # Stage 3: AI Product Curation
             try:

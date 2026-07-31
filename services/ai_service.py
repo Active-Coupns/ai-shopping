@@ -113,13 +113,15 @@ def generate_mock_ai_curation(query: str, products: List[Dict[str, Any]], countr
         why_fits = f"{sentence_1} {sentence_2}"
         
         curated_results.append({
-            "title": title,
+            "title": re.sub(r"\s*-\s*Curation Choice.*", "", title),
             "price": price,
             "original_url": prod["original_url"],
             "affiliate_url": prod["original_url"],
             "source": source,
             "formatted_specs": specs,
-            "why_it_fits_you": why_fits
+            "why_it_fits_you": why_fits,
+            "image_url": prod.get("image_url"),
+            "thumbnail": prod.get("thumbnail")
         })
         
     return curated_results
@@ -199,14 +201,25 @@ async def curate_products(scraped_items: list, user_query: str) -> list:
             if (orig_url is None or orig_url == "") and orig_id is not None and 0 <= orig_id < len(scraped_items):
                 orig_url = scraped_items[orig_id]["original_url"]
                 
+            image_url = None
+            thumbnail = None
+            if orig_id is not None and 0 <= orig_id < len(scraped_items):
+                image_url = scraped_items[orig_id].get("image_url")
+                thumbnail = scraped_items[orig_id].get("thumbnail")
+
+            raw_title = pick.get("title") or "Product Title"
+            cleaned_title = re.sub(r"\s*-\s*Curation Choice.*", "", raw_title)
+
             results.append({
-                "title": pick.get("title") or "Product Title",
+                "title": cleaned_title,
                 "price": float(pick.get("price") or 0.0),
                 "original_url": orig_url or "https://www.example.com",
                 "affiliate_url": orig_url or "https://www.example.com",
                 "source": pick.get("source") or "E-Commerce Store",
                 "formatted_specs": pick.get("formatted_specs") or {},
-                "why_it_fits_you": pick.get("why_it_fits_you") or "This product matches your requirements."
+                "why_it_fits_you": pick.get("why_it_fits_you") or "This product matches your requirements.",
+                "image_url": image_url,
+                "thumbnail": thumbnail
             })
             
         return results
