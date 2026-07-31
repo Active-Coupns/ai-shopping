@@ -109,16 +109,73 @@ async def execute_search(
                 fallback_raw = generate_mock_products(request.query, request.country)
                 final_raw_picks = fallback_raw[:3]
             else:
-                raise HTTPException(status_code=504, detail="Search request timed out")
+                logger.warning("Search pipeline timed out. Returning empty list.")
+                log_entry = UsageLog(
+                    client_id=client.id,
+                    endpoint="/v1/search",
+                    country=request.country,
+                    credits_deducted=1.0,
+                    request_payload=payload_str,
+                    response_status=status.HTTP_200_OK
+                )
+                db.add(log_entry)
+                db.commit()
+                return SearchResponse(
+                    results=[],
+                    products=[],
+                    coupons=[],
+                    credits_remaining=updated_wallet.balance,
+                    currency="$",
+                    message="Scraper timeout"
+                )
         except HTTPException as he:
-            raise he
+            if not settings.HASDATA_API_KEY:
+                raise he
+            else:
+                logger.warning(f"Search pipeline HTTP error: {he.detail}. Returning empty list.")
+                log_entry = UsageLog(
+                    client_id=client.id,
+                    endpoint="/v1/search",
+                    country=request.country,
+                    credits_deducted=1.0,
+                    request_payload=payload_str,
+                    response_status=status.HTTP_200_OK
+                )
+                db.add(log_entry)
+                db.commit()
+                return SearchResponse(
+                    results=[],
+                    products=[],
+                    coupons=[],
+                    credits_remaining=updated_wallet.balance,
+                    currency="$",
+                    message="Scraper timeout"
+                )
         except Exception as e:
             if not settings.HASDATA_API_KEY:
                 logger.error(f"Search pipeline encountered error: {str(e)}. Using fallback products.")
                 fallback_raw = generate_mock_products(request.query, request.country)
                 final_raw_picks = fallback_raw[:3]
             else:
-                raise HTTPException(status_code=502, detail=f"Search pipeline error: {str(e)}")
+                logger.error(f"Search pipeline encountered error: {str(e)}. Returning empty list.")
+                log_entry = UsageLog(
+                    client_id=client.id,
+                    endpoint="/v1/search",
+                    country=request.country,
+                    credits_deducted=1.0,
+                    request_payload=payload_str,
+                    response_status=status.HTTP_200_OK
+                )
+                db.add(log_entry)
+                db.commit()
+                return SearchResponse(
+                    results=[],
+                    products=[],
+                    coupons=[],
+                    credits_remaining=updated_wallet.balance,
+                    currency="$",
+                    message="Scraper timeout"
+                )
             
         # Step 5: Smart Hybrid Affiliate Link & Coupon waterfall Conversion
         final_picks, active_coupons = process_affiliates_and_coupons(

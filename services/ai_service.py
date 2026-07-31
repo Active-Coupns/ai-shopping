@@ -146,7 +146,7 @@ async def curate_products(scraped_items: list, user_query: str) -> list:
     formatted_input = []
     for idx, p in enumerate(scraped_items):
         formatted_input.append(
-            f"ID: {idx}\nTitle: {p['title']}\nPrice: {p['price']}\nStore: {p['source']}\nURL: {p['original_url']}\nRaw Details: {p.get('raw_details', '')}\n"
+            f"ID: {idx}\nTitle: {p['title']}\nPrice: {p['price']}\nStore: {p['source']}\nURL: {p['original_url']}\nRaw Details: {p.get('raw_details', '')[:100]}\n"
         )
     products_context = "\n---\n".join(formatted_input)
 

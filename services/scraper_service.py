@@ -111,7 +111,7 @@ def generate_mock_products(query: str, country: str) -> List[Dict[str, Any]]:
 import asyncio
 
 async def _execute_hasdata_scrape(query: str, country: str) -> List[Dict[str, Any]]:
-    async with httpx.AsyncClient(timeout=4.0) as client:
+    async with httpx.AsyncClient(timeout=10.0) as client:
         headers = {
             "x-api-key": settings.HASDATA_API_KEY,
             "Content-Type": "application/json"
@@ -141,7 +141,7 @@ async def _execute_hasdata_scrape(query: str, country: str) -> List[Dict[str, An
             if response.status_code == 200:
                 data = response.json()
                 results = data.get("searchResults") or data.get("results") or []
-                for item in results[:5]:
+                for item in results[:8]:
                     price_str = str(item.get("price") or "")
                     price_val = 0.0
                     try:
@@ -177,6 +177,8 @@ async def _execute_hasdata_scrape(query: str, country: str) -> List[Dict[str, An
             logger.info(f"Calling HasData Google Shopping Scraper for {second_store}")
             params = {
                 "q": query,
+                "domain": "google.co.in" if is_in else "google.com",
+                "country": country.lower(),
                 "location": "India" if is_in else "United States",
                 "tbm": "shop",
                 "gl": country.lower(),
@@ -193,7 +195,7 @@ async def _execute_hasdata_scrape(query: str, country: str) -> List[Dict[str, An
                 data = response.json()
                 # Check shoppingResults first, then organicResults, then general results
                 results = data.get("shoppingResults") or data.get("organicResults") or data.get("results") or []
-                for item in results[:5]:
+                for item in results[:8]:
                     price_str = str(item.get("price") or "")
                     price_val = 0.0
                     try:

@@ -39,6 +39,8 @@ class Coupon(BaseModel):
 
 class SearchResponse(BaseModel):
     results: List[ProductCuration] = Field(..., description="Top 3 e-commerce matches curated by AI")
+    products: Optional[List[ProductCuration]] = Field(default=None, description="Alias for results to support frontend mappings")
     coupons: List[Coupon] = Field(default_factory=list, description="Available deals & promo codes for the target country")
     credits_remaining: float = Field(..., description="Remaining credit balance in the client wallet")
     currency: str = Field(default="$", description="Currency symbol of the product prices (default is $)")
+    message: Optional[str] = Field(default=None, description="Optional system message or error details")
