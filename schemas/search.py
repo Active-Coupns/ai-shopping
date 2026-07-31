@@ -44,3 +44,6 @@ class SearchResponse(BaseModel):
     credits_remaining: float = Field(..., description="Remaining credit balance in the client wallet")
     currency: str = Field(default="$", description="Currency symbol of the product prices (default is $)")
     message: Optional[str] = Field(default=None, description="Optional system message or error details")
+    query: Optional[str] = Field(default=None, description="The query executed")
+    ai_analysis: Optional[str] = Field(default=None, description="AI curation analysis note")
+    total_deals: Optional[int] = Field(default=0, description="Total deals found")

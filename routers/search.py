@@ -13,6 +13,7 @@ from services.scraper_service import scrape_products, generate_mock_products
 from services.ai_service import curate_products, optimize_search_query
 from services.affiliate_service import process_affiliates_and_coupons
 from models.usage_log import UsageLog
+from config import settings
 
 router = APIRouter(prefix="/v1", tags=["Search"])
 logger = logging.getLogger("gateway.router.search")
@@ -126,7 +127,10 @@ async def execute_search(
                     coupons=[],
                     credits_remaining=updated_wallet.balance,
                     currency="$",
-                    message="Scraper timeout"
+                    message="Scraper timeout",
+                    query=request.query,
+                    ai_analysis="Scraping took too long. Please try again.",
+                    total_deals=0
                 )
         except HTTPException as he:
             if not settings.HASDATA_API_KEY:
@@ -149,7 +153,10 @@ async def execute_search(
                     coupons=[],
                     credits_remaining=updated_wallet.balance,
                     currency="$",
-                    message="Scraper timeout"
+                    message="Scraper timeout",
+                    query=request.query,
+                    ai_analysis="Scraping took too long. Please try again.",
+                    total_deals=0
                 )
         except Exception as e:
             if not settings.HASDATA_API_KEY:
@@ -174,7 +181,10 @@ async def execute_search(
                     coupons=[],
                     credits_remaining=updated_wallet.balance,
                     currency="$",
-                    message="Scraper timeout"
+                    message="Scraper timeout",
+                    query=request.query,
+                    ai_analysis="Scraping took too long. Please try again.",
+                    total_deals=0
                 )
             
         # Step 5: Smart Hybrid Affiliate Link & Coupon waterfall Conversion
